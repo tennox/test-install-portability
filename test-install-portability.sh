@@ -84,7 +84,6 @@ prepare_foreign_file() {
   return 0
 }
 
-
 test_install_stdin_heredoc() {
   # Variant:
   #   install -m 755 /dev/stdin target <<'EOF'
@@ -132,16 +131,26 @@ test_install_stdin_pipe_info() {
 
   echo 'echo "stdin pipe"' | install -m 755 /dev/stdin "$target" >/dev/null 2>&1 && rc=0 || rc=$?
 
-  if [ "$rc" -eq 0 ]; then
-    echo "[INFO] echo | install -m 755 /dev/stdin succeeded on this platform"
-    if check_script_runs "$target" "stdin pipe"; then
-      echo "       Installed script runs and prints expected output."
-    else
-      echo "       Installed script did not behave as expected."
-    fi
-  else
-    echo "[INFO] echo | install -m 755 /dev/stdin failed with status $rc on this platform"
-  fi
+  case "$(uname -s)" in
+    Darwin)
+      echo "[INFO] On Darwin, echo | install -m 755 /dev/stdin exited with $rc (expected to fail)."
+      ;;
+    Linux)
+      if [ "$rc" -eq 0 ]; then
+        echo "[INFO] On Linux, echo | install -m 755 /dev/stdin succeeded."
+        if check_script_runs "$target" "stdin pipe"; then
+          echo "       Installed script runs and prints expected output."
+        else
+          echo "       Installed script did not behave as expected."
+        fi
+      else
+        echo "[INFO] On Linux, echo | install -m 755 /dev/stdin failed with status $rc."
+      fi
+      ;;
+    *)
+      echo "[INFO] On $(uname -s), echo | install -m 755 /dev/stdin exited with $rc."
+      ;;
+  esac
 
   return 0
 }
@@ -176,10 +185,9 @@ EOF
 }
 
 test_install_stdin_heredoc_foreign_owner() {
-  # This is the pattern from your fix:
+  # Pattern from the earlier fix:
   #   install -m 755 /dev/stdin target <<'EOF'
-  # It should succeed even when the previous file was owned by root, as long as
-  # we have write permission on the directory.
+  # Should succeed even when the previous file was owned by root.
   local target="$tmpdir/foreign/install-stdin-foreign.sh"
 
   if ! prepare_foreign_file "$target"; then
@@ -199,6 +207,43 @@ EOF
   check_script_runs "$target" "install stdin foreign owner"
 }
 
+test_tempfile_install() {
+  # New pattern:
+  #   tmp=...; printf '%s\n' "$DEVENV_TASK_ENV" >"$tmp"; install -m 755 "$tmp" target; rm -f "$tmp"
+  local target="$tmpdir/temp-install.sh"
+  local tmp="$tmpdir/load-exports.$$"
+
+  printf '%s\n' '#!/usr/bin/env bash' 'echo "temp install"' >"$tmp"
+
+  install -m 755 "$tmp" "$target"
+  rm -f "$tmp"
+
+  check_script_runs "$target" "temp install"
+}
+
+test_tempfile_install_foreign_owner() {
+  # Same pattern, but with an existing foreign-owned target:
+  # Should still succeed and produce a working script.
+  local target="$tmpdir/foreign/temp-install-foreign.sh"
+  local tmp="$tmpdir/load-exports-foreign.$$"
+
+  if ! prepare_foreign_file "$target"; then
+    echo "  Skipping test_tempfile_install_foreign_owner."
+    return 0
+  fi
+
+  printf '%s\n' '#!/usr/bin/env bash' 'echo "temp install foreign owner"' >"$tmp"
+
+  echo "  Replacing foreign-owned file using temp file + install -m 755"
+
+  install -m 755 "$tmp" "$target"
+  rm -f "$tmp"
+
+  ls -l "$target" || true
+
+  check_script_runs "$target" "temp install foreign owner"
+}
+
 echo "Using install at: $(command -v install || echo 'not found')"
 echo
 
@@ -206,13 +251,16 @@ echo
 run_test "install with /dev/stdin + heredoc"          test_install_stdin_heredoc
 run_test "install with /dev/fd/0 + heredoc"           test_install_fd0_heredoc
 run_test "cat >file + chmod 755 (baseline)"           test_cat_chmod
+run_test "tempfile + install -m 755 (baseline)"       test_tempfile_install
 
 echo
-# Foreign-owner scenario that motivated the change
+# Foreign-owner scenarios
 run_test "cat >file + chmod 755 on foreign-owned file (chmod must fail)" \
          test_cat_chmod_foreign_owner
 run_test "install -m 755 /dev/stdin on foreign-owned file (must succeed)" \
          test_install_stdin_heredoc_foreign_owner
+run_test "tempfile + install -m 755 on foreign-owned file (must succeed)" \
+         test_tempfile_install_foreign_owner
 
 echo
 test_install_stdin_pipe_info
