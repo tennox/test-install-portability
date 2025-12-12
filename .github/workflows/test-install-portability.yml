@@ -1,0 +1,39 @@
+name: install stdin portability
+
+on:
+  push:
+    paths:
+      - '.github/workflows/install-portability.yml'
+      - 'test-install-portability.sh'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-install-portability:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show OS and install info
+        run: |
+          echo "=== OS info ==="
+          uname -a || true
+          echo
+          echo "=== install(1) location ==="
+          command -v install || echo "install not found"
+          echo
+          echo "=== install(1) help/version (best-effort) ==="
+          install --version 2>&1 || install -V 2>&1 || install -h 2>&1 || true
+
+      - name: Make test script executable
+        run: chmod +x ./test-install-portability.sh
+
+      - name: Run install stdin portability tests
+        run: ./test-install-portability.sh
+
