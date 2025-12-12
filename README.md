@@ -10,15 +10,24 @@ This repository tests different approaches for installing executable scripts usi
 
 All required portability tests **PASSED** on both Linux and macOS.
 
-| Test | Linux (Ubuntu 24.04) | macOS (Darwin 24.6) |
-|------|---------------------|---------------------|
-| `install -m 755 /dev/stdin <<EOF` | ✅ PASS | ✅ PASS |
-| `install -m 755 /dev/fd/0 <<EOF` | ✅ PASS | ✅ PASS |
-| `cat >file && chmod 755` (baseline) | ✅ PASS | ✅ PASS |
-| `tempfile + install -m 755` (baseline) | ✅ PASS | ✅ PASS |
-| `cat + chmod` on foreign-owned file | ✅ PASS (chmod fails as expected) | ✅ PASS (chmod fails as expected) |
-| `install /dev/stdin` on foreign-owned file | ✅ PASS (overwrites & changes owner) | ✅ PASS (overwrites & changes owner) |
-| `tempfile + install` on foreign-owned file | ✅ PASS (overwrites & changes owner) | ✅ PASS (overwrites & changes owner) |
+#### Basic Functionality
+
+| Approach | Linux (Ubuntu 24.04) | macOS (Darwin 24.6) |
+|----------|---------------------|---------------------|
+| `install -m 755 /dev/stdin <<EOF` | ✅ Works | ✅ Works |
+| `install -m 755 /dev/fd/0 <<EOF` | ✅ Works | ✅ Works |
+| `cat >file && chmod 755` | ✅ Works | ✅ Works |
+| `tempfile + install -m 755` | ✅ Works | ✅ Works |
+
+#### Foreign-Owned File Handling
+
+When replacing a file owned by another user (e.g., root-owned in user-writable directory):
+
+| Approach | Linux | macOS | Outcome |
+|----------|-------|-------|---------|
+| `cat >file && chmod` | ⚠️ chmod denied | ⚠️ chmod denied | File updated but NOT executable |
+| `install /dev/stdin` | ✅ Works | ✅ Works | File replaced, executable, new owner |
+| `tempfile + install` | ✅ Works | ✅ Works | File replaced, executable, new owner |
 
 ### Platform Details
 
