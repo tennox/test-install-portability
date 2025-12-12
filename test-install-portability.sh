@@ -75,14 +75,15 @@ prepare_foreign_file() {
   fi
 
   mkdir -p "$dir"
-  # Create the file as root with mode 666, owner root:root.
-  sudo sh -c "echo '# original content' >'$path'; chmod 666 '$path'; chown root:root '$path'"
+  # Create the file as root with mode 666, owner root (group left as default).
+  sudo sh -c "echo '# original content' >'$path'; chmod 666 '$path'; chown root '$path'"
 
   echo "  Created foreign-owned file:"
   ls -l "$path" || true
 
   return 0
 }
+
 
 test_install_stdin_heredoc() {
   # Variant:
